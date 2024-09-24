@@ -12,7 +12,11 @@
 .EXAMPLE
     .\Ejercicio1.ps1 -Matriz "matriz.txt" -Producto 4 -Separador ","
 .NOTES
-    Autor: Cristian
+    #Integrantes del grupo:
+    #-Cespedes, Cristian Ivan -> DNI 41704776
+    #-Gomez, Luciano Dario -> DNI 41572055
+    #-Luna, Leandro Santiago -> DNI 40886200
+    #-Panigazzi, Agustin Fabian -> DNI 43744593
     Fecha: 2024
 #>
 

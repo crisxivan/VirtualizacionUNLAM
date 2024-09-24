@@ -21,7 +21,11 @@ Get-Help .\ejercicio3.ps1
 Muestra la ayuda del script.
 
 .NOTES
-Autor: Lean
+#Integrantes del grupo:
+#-Cespedes, Cristian Ivan -> DNI 41704776
+#-Gomez, Luciano Dario -> DNI 41572055
+#-Luna, Leandro Santiago -> DNI 40886200
+#-Panigazzi, Agustin Fabian -> DNI 43744593
 Fecha: 20 de septiembre de 2024
 #>
 
@@ -34,19 +38,16 @@ param (
     [switch]$Help
 )
 
-# Si se solicita la ayuda, mostrarla y salir
 if ($Help) {
     Get-Help $MyInvocation.MyCommand.Path
     exit
 }
 
-# Verificar si el directorio existe
 if (-not (Test-Path -Path $directorio -PathType Container)) {
     Write-Host "El directorio especificado no existe: $directorio"
     exit 1
 }
 
-# Obtener archivos y buscar duplicados
 $duplicados = @{}
 $rutas = @{}
 
@@ -63,17 +64,17 @@ Get-ChildItem -Path $directorio -Recurse -File | ForEach-Object {
     }
 }
 
-# Imprimir resultados
+# Imprime resultados
 foreach ($clave in $duplicados.Keys) {
     $directorios = $rutas[$clave] -split "`n" | Sort-Object -Unique
     # Write-Host $rutas[$clave] -split "`n"
     if ($directorios.Count -gt 1) {
-        Write-Host $duplicados[$clave]  # Imprime el nombre del archivo
-        # Imprime solo los directorios únicos
+        Write-Host $duplicados[$clave] 
+
         foreach ($dir in $directorios) {
             Write-Host $dir
         }
-        Write-Host ""  # Línea en blanco entre duplicados
+        Write-Host "" 
     }
 }
 

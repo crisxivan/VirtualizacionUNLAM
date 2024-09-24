@@ -17,6 +17,12 @@
 
 #>
 
+#Integrantes del grupo:
+#-Cespedes, Cristian Ivan -> DNI 41704776
+#-Gomez, Luciano Dario -> DNI 41572055
+#-Luna, Leandro Santiago -> DNI 40886200
+#-Panigazzi, Agustin Fabian -> DNI 43744593
+
 param(
     [Parameter(Mandatory=$true, HelpMessage="Especifica el directorio a monitorear.")][string]$directorio,
     [string]$salida,
