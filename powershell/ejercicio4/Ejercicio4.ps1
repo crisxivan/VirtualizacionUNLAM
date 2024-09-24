@@ -1,7 +1,7 @@
 param(
     [Parameter(Mandatory=$true)][string]$directorio,
     [string]$salida,
-    [bool]$kill
+    [switch]$kill
 )
 
 if (-not ($salida -xor $kill)) {
@@ -32,6 +32,7 @@ $scriptBlock = {
         $nombre = $Event.SourceEventArgs.Name
         $tam = (Get-Item $nuevoArch).length
 
+
         $existearch = Get-ChildItem -Path $using:directorioAbs | Where-Object { $_.Name -eq $nombre -and $_.Length -eq $tam }
 
 
@@ -47,7 +48,7 @@ $scriptBlock = {
     }
 
     Register-ObjectEvent -InputObject $watcher -EventName Created -Action $action
-    Register-ObjectEvent -InputObject $watcher -EventName Changed -Action $action
+    # Register-ObjectEvent -InputObject $watcher -EventName Changed -Action $action
 
 
     while ($true) {
