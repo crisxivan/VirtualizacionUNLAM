@@ -55,7 +55,6 @@ while [[ "$#" -gt 0 ]]; do
     shift
 done
 
-# echo $separador
 # Verificar si producto escalar y trasponer están activados al mismo tiempo
 if [ "$producto_escalar" -ne 1 ] && [ "$trasponer" -eq 1 ]; then
     echo "Error: No puedes usar producto escalar y trasponer al mismo tiempo."
@@ -65,6 +64,11 @@ fi
 # Verificar que el archivo de la matriz existe
 if [ ! -f "$archivo_matriz" ]; then
     echo "Error: El archivo $archivo_matriz no existe."
+    exit 1
+fi
+
+if [ ! -s "$archivo_matriz" ]; then
+    echo "Error: El archivo $archivo_matriz está vacío."
     exit 1
 fi
 
@@ -80,13 +84,21 @@ filas=0
 
 while IFS="$separador" read -r linea; do
     fila=()
+    # verifica si hay "," en vez de "."
     if [[ "$linea" =~ [0-9]+,[0-9]+ && "$separador" != "," ]]; then
         echo "Error: La matriz contiene comas como valores decimales. Usa puntos ('.') en su lugar para los decimales."
         exit 1
     fi
+
+    # verifica si hay caracteres no numericos
     for valor in $(echo "$linea" | tr "$separador" " "); do
+        if ! [[ "$valor" =~ ^-?[0-9]+(\.[0-9]+)?$ ]]; then
+            echo "Error: La matriz contiene un valor no numérico: $valor"
+            exit 1
+        fi
         fila+=("$valor")
     done
+
     matriz+=("${fila[@]}")
     if [ $columnas -eq -1 ]; then
         columnas=${#fila[@]}
@@ -100,15 +112,14 @@ while IFS="$separador" read -r linea; do
     filas=$((filas + 1))
 done < "$archivo_matriz"
 
-# echo ${#fila[@]}
-# echo $columnas
 if [ $filas -ne $columnas ]; then
     echo "Error: La matriz no es cuadrada. Número de filas: $filas, Número de columnas: $columnas"
     exit 1
 fi
 
 # Archivo de salida
-archivo_salida="salida.$(basename "$archivo_matriz")"
+directorio_matriz=$(dirname "$archivo_matriz")
+archivo_salida="$directorio_matriz/salida.$(basename "$archivo_matriz")"
 
 # Función para transponer la matriz
 function transponer_matriz {
@@ -144,5 +155,3 @@ else
     producto_escalar_matriz
     echo "Operación completada."
 fi
-
-# echo "Operación completada."

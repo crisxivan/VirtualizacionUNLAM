@@ -59,6 +59,12 @@ if (-not (Test-Path $archivo_matriz)) {
     exit
 }
 
+# Verificar si el archivo está vacío
+if ((Get-Content $archivo_matriz).Length -eq 0) {
+    Write-Host "Error: El archivo $archivo_matriz está vacío."
+    exit
+}
+
 # Verificar que no se pasen ambos parámetros
 if ($trasponer -and $producto_escalar -ne 1) {
     Write-Host "Error: No se puede usar -trasponer junto con -producto. Elija solo uno."
@@ -95,6 +101,15 @@ Get-Content $archivo_matriz | ForEach-Object {
 
     # Separar la línea en valores y añadir a la matriz
     $fila = $linea -split [regex]::Escape($separator)
+
+    # Validación adicional para que cada valor sea un número válido (entero o decimal con punto)
+    foreach ($valor in $fila) {
+        if (-not ($valor -match '^(-?[0-9]+(\.[0-9]+)?)$')) {
+            Write-Host "Error: La matriz contiene un valor no numérico: $valor"
+            exit
+        }
+    }
+    
     $matriz += $fila
     $filas++
 
@@ -114,7 +129,8 @@ if ($filas -ne $columnas) {
 }
 
 # Archivo de salida
-$archivo_salida = "salida.$(Split-Path $archivo_matriz -Leaf)"
+# $archivo_salida = "salida.$(Split-Path $archivo_matriz -Leaf)"
+$archivo_salida = Join-Path (Split-Path $archivo_matriz -Parent) "salida.$(Split-Path $archivo_matriz -Leaf)"
 
 # Función para transponer la matriz
 function TransponerMatriz {
