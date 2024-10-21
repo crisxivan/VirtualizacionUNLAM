@@ -266,10 +266,11 @@ void manejador( int sig ){
 void mostrarAyuda()
 {
 	puts("-------------- AYUDA --------------");
-	puts(" \n  Este programa es un chat tipo mailbox a la antigua\n "
-		"Para ello se crea un servidor y un cliente que se comunican a traves de memoria compartida." );
+		puts("\n Este programa es el juego preguntados.");
 	puts("Comandos para el Servidor:");
-	puts("- 1. ./servidorComp ");
+	puts("- 1. ./servidorComp -a|--archivo <archivo> -c|--cantidad <cantidad>");
+    puts("- 2. ./servidorComp -h");
+    
     puts("Para terminarlo");
 	puts("kill -SIGUSR1 Pid_Demonio");
 
