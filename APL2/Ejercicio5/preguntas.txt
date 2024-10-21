@@ -1,0 +1,3 @@
+¿De qué color era el caballo blanco de San Martín?,2,Negro,Blanco,Marrón
+¿Cuál es la capital de Francia?,1,Paris,Londres,Berlín
+¿Cuál es el río más largo del mundo?,1,Nilo,Amazonas,Mississippi

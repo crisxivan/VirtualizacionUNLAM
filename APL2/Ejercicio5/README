@@ -1,0 +1,13 @@
+
+# construir el docker
+
+docker build -t preguntados .
+
+#correrlo 
+
+docker run -it --rm -p 8080:8080 preguntados
+
+
+# y en otras terminales ejecutar los clientes 
+
+ ./cliente -n "Jugador1" -p 8080 -s 127.0.0.1
