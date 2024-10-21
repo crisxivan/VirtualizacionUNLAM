@@ -1,0 +1,10 @@
+¿De qué color era el caballo blanco de San Martín?,2,Negro,Blanco,Marrón
+¿Cuál es la capital de Francia?,2,Madrid,París,Berlín
+¿Qué continente es conocido como la cuna de la civilización?,3,África,Asia,Europa
+¿Cuál es el océano más grande del mundo?,1,Atlántico,Pacífico,Índico
+¿En qué año llegó el hombre a la luna?,2,1965,1969,1971
+¿Qué planeta es conocido como el "planeta rojo"?,2,Júpiter,Marte,Saturno
+¿Quién escribió "Cien años de soledad"?,3,Jorge Luis Borges,Gabriel García Márquez,Julio Cortázar
+¿Cuál es el símbolo químico del oro?,2,Au,Ag,Fe
+¿Qué animal es conocido como el "rey de la selva"?,2,Tigre,León,Elefante
+¿Cuál es el idioma más hablado del mundo?,1,Inglés,Chino,Español
