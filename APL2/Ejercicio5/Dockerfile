@@ -16,6 +16,6 @@ COPY . .
 RUN make
 
 # Comando por defecto para ejecutar el servidor
-CMD ["./servidor", "-p", "8080", "-a", "preguntas.txt", "-u", "2", "-c", "3"]
+CMD ["./servidor", "-p", "8080", "-u", "2", "-a", "preguntas.txt",  "-c", "3"]
 
 

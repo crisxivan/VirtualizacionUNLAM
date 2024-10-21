@@ -5,6 +5,9 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <vector>
+#include <thread>
+#include <mutex>
+#include <algorithm>
 
 #define MAX_CLIENTS 5
 #define BUFFER_SIZE 1024
@@ -18,11 +21,13 @@ struct Question {
 class QuizServer {
 public:
     void loadQuestions(const std::string& filename);
-    void handleClient(int client_socket);
-    void startServer(int port);
+    void handleClient(int client_socket, int client_id);
+    void startServer(int port, int required_users, int questions_count);
 
 private:
     std::vector<Question> questions;
+    std::vector<int> scores;
+    std::mutex mtx; // Mutex for thread safety
 };
 
 void QuizServer::loadQuestions(const std::string& filename) {
@@ -49,10 +54,7 @@ void QuizServer::loadQuestions(const std::string& filename) {
     file.close();
 }
 
-
-
-
-void QuizServer::handleClient(int client_socket) {
+void QuizServer::handleClient(int client_socket, int client_id) {
     char buffer[BUFFER_SIZE];
     int score = 0;
 
@@ -64,9 +66,14 @@ void QuizServer::handleClient(int client_socket) {
         std::cout << "Enviando pregunta: " << buffer << std::endl;
 
         memset(buffer, 0, sizeof(buffer)); // Limpia el buffer
-        recv(client_socket, buffer, sizeof(buffer), 0);
+        ssize_t recv_size = recv(client_socket, buffer, sizeof(buffer), 0);
+        if (recv_size <= 0) {
+            std::cout << "Cliente " << client_id << " desconectado\n";
+            break; // El cliente se ha desconectado
+        }
+        
         int answer = atoi(buffer);
-        std::cout << "Respuesta recibida: " << answer << std::endl; // Log
+        std::cout << "Respuesta recibida de cliente " << client_id << ": " << answer << std::endl; // Log
         if (answer == q.correct_answer) {
             score++;
             std::cout << "Respuesta correcta para la pregunta: " << q.question << std::endl;
@@ -75,16 +82,22 @@ void QuizServer::handleClient(int client_socket) {
         }
     }
 
+    {
+        std::lock_guard<std::mutex> lock(mtx); // Bloquea el acceso al recurso compartido
+        scores[client_id] = score; // Guarda el puntaje del cliente
+    }
+    
     snprintf(buffer, sizeof(buffer), "Tu puntaje final es: %d de %zu\n", score, questions.size());
     send(client_socket, buffer, strlen(buffer), 0);
-    std::cout << "Enviando puntaje final: " << score << " de " << questions.size() << std::endl;
+    std::cout << "Enviando puntaje final a cliente " << client_id << ": " << score << " de " << questions.size() << std::endl;
     close(client_socket);
 }
 
-void QuizServer::startServer(int port) {
+void QuizServer::startServer(int port, int required_users, int questions_count) {
     int server_socket, client_socket;
     struct sockaddr_in server_addr, client_addr;
     socklen_t addr_size;
+    std::vector<std::thread> client_threads;
 
     server_socket = socket(AF_INET, SOCK_STREAM, 0);
     server_addr.sin_family = AF_INET;
@@ -95,26 +108,41 @@ void QuizServer::startServer(int port) {
 
     std::cout << "Servidor esperando conexiones en el puerto " << port << "...\n";
 
-    while (true) {
+    scores.resize(required_users); // Inicializa el vector de puntajes
+
+    while (client_threads.size() < required_users) {
         addr_size = sizeof(client_addr);
         client_socket = accept(server_socket, (struct sockaddr *)&client_addr, &addr_size);
         std::cout << "Cliente conectado\n";
-        handleClient(client_socket);
+
+        int client_id = client_threads.size(); // Asigna un ID al cliente
+        client_threads.emplace_back(&QuizServer::handleClient, this, client_socket, client_id);
     }
 
+    for (auto& thread : client_threads) {
+        thread.join(); // Espera a que todos los hilos terminen
+    }
+
+    // Anunciar el ganador
+    int winner_id = std::distance(scores.begin(), std::max_element(scores.begin(), scores.end()));
+    std::cout << "El ganador es el Cliente " << winner_id << " con un puntaje de " << scores[winner_id] << "!\n";
     close(server_socket);
 }
 
 int main(int argc, char *argv[]) {
-    if (argc < 5) {
-        std::cerr << "Uso: " << argv[0] << " -p <puerto> -a <archivo> -c <cantidad>\n";
+    if (argc < 9) {
+        std::cerr << "Uso: " << argv[0] << " -p <puerto> -u <usuarios> -a <archivo> -c <cantidad>\n";
         return 1;
     }
 
     int port = atoi(argv[2]);
+    int required_users = atoi(argv[4]);
+    std::string questions_file = argv[6];
+    int questions_count = atoi(argv[8]); // Este parámetro no se utiliza, puedes implementarlo si es necesario
+
     QuizServer server;
-    server.loadQuestions(argv[4]);
-    server.startServer(port);
+    server.loadQuestions(questions_file);
+    server.startServer(port, required_users, questions_count);
 
     return 0;
 }

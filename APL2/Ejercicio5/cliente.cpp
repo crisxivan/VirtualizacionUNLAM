@@ -60,6 +60,7 @@ int main(int argc, char *argv[]) {
 
             memset(buffer, 0, sizeof(buffer));  // Limpiar el buffer antes de leer la entrada
             fgets(buffer, sizeof(buffer), stdin);
+            buffer[strcspn(buffer, "\n")] = 0; // Quitar el salto de línea
 
             // Enviando respuesta al servidor
             ssize_t send_size = send(client_socket, buffer, strlen(buffer), 0);
@@ -67,12 +68,9 @@ int main(int argc, char *argv[]) {
                 std::cerr << "Error al enviar respuesta\n";
                 break;
             }
-
-            std::cout << "Respuesta enviada: " << buffer;  // Log de la respuesta enviada
         }
     }
 
     close(client_socket);
-    std::cout << "Conexión cerrada\n";  // Log de cierre de conexión
     return 0;
 }
