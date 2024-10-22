@@ -33,6 +33,7 @@ private:
     int connected_clients = 0;  // Contador de clientes conectados
     int finished_clients = 0;   // Contador de clientes que han terminado
     bool game_started = false;  // Indica si el juego comenzó
+    bool game_finished = false;  // Indica si el juego finalizó
 };
 
 void QuizServer::loadQuestions(const std::string& filename) {
@@ -81,6 +82,14 @@ void QuizServer::handleClient(int client_socket, int client_id) {
         ssize_t recv_size = recv(client_socket, buffer, sizeof(buffer), 0);
         if (recv_size <= 0) {
             std::cout << "Cliente " << client_id << " desconectado\n";
+            {
+                std::lock_guard<std::mutex> lock(mtx);
+                // Elimina el puntaje del cliente
+                if (client_id < scores.size()) {
+                    scores.erase(scores.begin() + client_id);
+                }
+                connected_clients--;
+            }
             close(client_socket);
             return;  // Termina si el cliente se desconecta
         }
@@ -94,8 +103,13 @@ void QuizServer::handleClient(int client_socket, int client_id) {
     // Guardar el puntaje del cliente en la lista de scores
     {
         std::lock_guard<std::mutex> lock(mtx);
+        if (client_id >= scores.size()) {
+            scores.resize(client_id + 1, 0);  // Redimensiona e inicializa en 0
+        }
         scores[client_id] = score;
         finished_clients++;
+        std::cout << " Aguarde a que los demas terminen " << "...\n";
+        std::cout << " puntaje "<< scores[client_id] << "...\n";
     }
 
     // Notificar que un cliente ha terminado
@@ -103,17 +117,48 @@ void QuizServer::handleClient(int client_socket, int client_id) {
 
     // Esperar a que todos los clientes terminen
     std::unique_lock<std::mutex> lock(mtx);
-    cv.wait(lock, [this] { return finished_clients == scores.size(); });
+    cv.wait(lock, [this] { return finished_clients == connected_clients; });
 
     // Enviar el ganador a todos los clientes
-    int winner_id = std::distance(scores.begin(), 
-                                  std::max_element(scores.begin(), scores.end()));
+    // int winner_id = *std::max_element(scores.begin(), scores.end());
+    // int winner_id = std::distance(scores.begin(), 
+    //                                std::max_element(scores.begin(), scores.end()));
+
+    int winner_id = 0;
+    int max_score = scores[0];
+
+    // std::cout << " size " << scores.size()<< "...\n";
+    // Bucle para encontrar el mayor puntaje
+    for (int i = 0; i < scores.size(); i++) {
+        if (scores[i] > max_score) {
+            max_score = scores[i];
+            winner_id = i;
+            // std::cout << " entro " << "...\n";
+        }
+    }
+    // std::cout << " winner_id " << winner_id << "...\n";
+    // std::cout << " max_score " << max_score << "...\n";
+
+    // Obtener el puntaje del ganador
+    int winner_score = scores[winner_id];
+    
+    // std::cout << " winner_id " << winner_id  << "...\n";
+    // std::cout << " score " << scores[0] << "...\n";
+    // std::cout << " score " << scores[1] << "...\n";
+    // std::cout << " score " << scores[2] << "...\n";
+
     snprintf(buffer, sizeof(buffer), 
              "El ganador es el Cliente %d con un puntaje de %d!\n", 
-             winner_id, scores[winner_id]);
+             winner_id, winner_score);
     send(client_socket, buffer, strlen(buffer), 0);
 
     close(client_socket);
+    // Reseteo las variables
+    scores.clear();
+    connected_clients = 0;
+    finished_clients  = 0;
+    game_started      = false;
+    game_finished     = true;
 }
 
 void QuizServer::startServer(int port, int required_users, int questions_count) {
@@ -134,7 +179,8 @@ void QuizServer::startServer(int port, int required_users, int questions_count) 
     scores.resize(required_users);  // Inicializar el vector de puntajes
 
     // Aceptar conexiones hasta alcanzar el número requerido de usuarios
-    while (client_threads.size() < required_users) {
+    while (client_threads.size() < MAX_CLIENTS) {
+        
         addr_size = sizeof(client_addr);
         client_socket = accept(server_socket, 
                                (struct sockaddr *)&client_addr, &addr_size);
@@ -143,18 +189,32 @@ void QuizServer::startServer(int port, int required_users, int questions_count) 
         {
             std::lock_guard<std::mutex> lock(mtx);
             connected_clients++;
-            if (connected_clients == required_users) {
+            if (connected_clients >= required_users) {
+                std::cout << " JUEGO INICIADO " << "...\n";
                 game_started = true;
                 cv.notify_all();  // Notificar que el juego puede comenzar
             }
+
+            
         }
 
         int client_id = client_threads.size();  // Asignar ID al cliente
         client_threads.emplace_back(&QuizServer::handleClient, this, 
                                     client_socket, client_id);
-    }
 
-    // Esperar a que todos los hilos terminen
+        // if( game_finished == true ) {
+        //     // Esperar a que todos los hilos terminen
+        //     for (auto& thread : client_threads) {
+        //         if (thread.joinable()) {
+        //             thread.join();
+        //         }
+        //          std::cout << "hilo b\n";
+        //     }
+
+        //      game_finished = false;
+        // }
+    }
+    
     for (auto& thread : client_threads) {
         thread.join();
     }
@@ -209,6 +269,11 @@ int main(int argc, char *argv[]) {
 
     QuizServer server;
     server.loadQuestions(questions_file);
+    while ( true )
+    {
+        server.startServer(port, required_users, questions_count);
+    }
+    
     server.startServer(port, required_users, questions_count);
 
     return 0;
