@@ -10,7 +10,7 @@
 #include <algorithm>
 #include <condition_variable>
 
-#define MAX_CLIENTS 5
+#define MAX_CLIENTS 10
 #define BUFFER_SIZE 1024
 
 struct Question {
@@ -22,7 +22,7 @@ struct Question {
 class QuizServer {
 public:
     void loadQuestions(const std::string& filename);
-    void handleClient(int client_socket, int client_id);
+    void handleClient(int client_socket, int client_id, int questions_count);
     void startServer(int port, int required_users, int questions_count);
 
 private:
@@ -60,38 +60,41 @@ void QuizServer::loadQuestions(const std::string& filename) {
     file.close();
 }
 
-void QuizServer::handleClient(int client_socket, int client_id) {
+void QuizServer::handleClient(int client_socket, int client_id, int questions_count) {
     {
         std::unique_lock<std::mutex> lock(mtx);
-        // Esperar hasta que se conecten todos los clientes necesarios
+        // Espera hasta que se conecten todos los clientes necesarios - faltaria un msj de que espere
         cv.wait(lock, [this] { return game_started; });
     }
 
     char buffer[BUFFER_SIZE];
     int score = 0;
 
-    // Enviar todas las preguntas al cliente
-    for (const auto& q : questions) {
+    // hay que recibir el nombre - devuelve el cliente id x ahora
+
+    // Envia las preguntas al cliente
+    for (int i = 0; i < questions_count && i < questions.size(); i++) {
+        const auto& q = questions[i];
         snprintf(buffer, sizeof(buffer), 
                  "Pregunta: %s\n1. %s\n2. %s\n3. %s\n", 
                  q.question.c_str(), q.options[0].c_str(), 
                  q.options[1].c_str(), q.options[2].c_str());
         send(client_socket, buffer, strlen(buffer), 0);
 
-        memset(buffer, 0, sizeof(buffer));  // Limpiar el buffer
+        memset(buffer, 0, sizeof(buffer));  /// Limpia el buffer
         ssize_t recv_size = recv(client_socket, buffer, sizeof(buffer), 0);
         if (recv_size <= 0) {
             std::cout << "Cliente " << client_id << " desconectado\n";
             {
                 std::lock_guard<std::mutex> lock(mtx);
-                // Elimina el puntaje del cliente
+                // Elimina el puntaje
                 if (client_id < scores.size()) {
                     scores.erase(scores.begin() + client_id);
                 }
                 connected_clients--;
             }
             close(client_socket);
-            return;  // Termina si el cliente se desconecta
+            return;  // Termina ahi
         }
 
         int answer = atoi(buffer);
@@ -100,7 +103,7 @@ void QuizServer::handleClient(int client_socket, int client_id) {
         }
     }
 
-    // Guardar el puntaje del cliente en la lista de scores
+    // Guarda el puntaje del cliente en la lista
     {
         std::lock_guard<std::mutex> lock(mtx);
         if (client_id >= scores.size()) {
@@ -112,10 +115,10 @@ void QuizServer::handleClient(int client_socket, int client_id) {
         std::cout << " puntaje "<< scores[client_id] << "...\n";
     }
 
-    // Notificar que un cliente ha terminado
+    // Notifica que un cliente termino
     cv.notify_all();
 
-    // Esperar a que todos los clientes terminen
+    // Espera a que todos los clientes terminen
     std::unique_lock<std::mutex> lock(mtx);
     cv.wait(lock, [this] { return finished_clients == connected_clients; });
 
@@ -128,7 +131,7 @@ void QuizServer::handleClient(int client_socket, int client_id) {
     int max_score = scores[0];
 
     // std::cout << " size " << scores.size()<< "...\n";
-    // Bucle para encontrar el mayor puntaje
+    // mayor puntaje
     for (int i = 0; i < scores.size(); i++) {
         if (scores[i] > max_score) {
             max_score = scores[i];
@@ -154,20 +157,19 @@ void QuizServer::handleClient(int client_socket, int client_id) {
 
     close(client_socket);
     // Reseteo las variables
-    scores.clear();
-    connected_clients = 0;
-    finished_clients  = 0;
-    game_started      = false;
-    game_finished     = true;
+    // scores.clear();
+    // connected_clients = 0;
+    // finished_clients  = 0;
+    // game_started      = false;
+    // game_finished     = true;
 }
 
 void QuizServer::startServer(int port, int required_users, int questions_count) {
     int server_socket, client_socket;
     struct sockaddr_in server_addr, client_addr;
     socklen_t addr_size;
-    std::vector<std::thread> client_threads;
 
-    // Crear y configurar el socket del servidor
+    // Crea y configurar el socket del servidor
     server_socket = socket(AF_INET, SOCK_STREAM, 0);
     server_addr.sin_family = AF_INET;
     server_addr.sin_addr.s_addr = INADDR_ANY;
@@ -176,51 +178,50 @@ void QuizServer::startServer(int port, int required_users, int questions_count) 
     listen(server_socket, MAX_CLIENTS);
 
     std::cout << "Servidor esperando conexiones en el puerto " << port << "...\n";
-    scores.resize(required_users);  // Inicializar el vector de puntajes
 
-    // Aceptar conexiones hasta alcanzar el número requerido de usuarios
-    while (client_threads.size() < MAX_CLIENTS) {
-        
-        addr_size = sizeof(client_addr);
-        client_socket = accept(server_socket, 
-                               (struct sockaddr *)&client_addr, &addr_size);
-        std::cout << "Cliente conectado\n";
+    while (true) {
+        scores.resize(required_users);
+        std::vector<std::thread> client_threads;
+        connected_clients = 0;
 
-        {
-            std::lock_guard<std::mutex> lock(mtx);
-            connected_clients++;
-            if (connected_clients >= required_users) {
-                std::cout << " JUEGO INICIADO " << "...\n";
-                game_started = true;
-                cv.notify_all();  // Notificar que el juego puede comenzar
+        // Acepta conexiones hasta alcanzar el número requerido de usuarios x param
+        while (connected_clients < required_users) {
+            addr_size = sizeof(client_addr);
+            client_socket = accept(server_socket, (struct sockaddr *)&client_addr, &addr_size);
+            std::cout << "Cliente conectado\n";
+
+            {
+                std::lock_guard<std::mutex> lock(mtx);
+                connected_clients++;
+                if (connected_clients >= required_users) {
+                    std::cout << " JUEGO INICIADO " << "...\n";
+                    game_started = true;
+                    cv.notify_all();  // Notificar que el juego comienza
+                }
             }
 
-            
+            int client_id = client_threads.size();  // Asignar ID al cliente
+            client_threads.emplace_back(&QuizServer::handleClient, this, client_socket, client_id, questions_count); // Este hilo es mas nuevo
         }
 
-        int client_id = client_threads.size();  // Asignar ID al cliente
-        client_threads.emplace_back(&QuizServer::handleClient, this, 
-                                    client_socket, client_id);
+        // Espera a que todos los hilos terminen
+        for (auto& thread : client_threads) {
+            thread.join();
+        }
 
-        // if( game_finished == true ) {
-        //     // Esperar a que todos los hilos terminen
-        //     for (auto& thread : client_threads) {
-        //         if (thread.joinable()) {
-        //             thread.join();
-        //         }
-        //          std::cout << "hilo b\n";
-        //     }
+        // Reinicia variables
+        scores.clear();
+        connected_clients = 0;
+        finished_clients  = 0;
+        game_started      = false;
+        game_finished     = false;
 
-        //      game_finished = false;
-        // }
-    }
-    
-    for (auto& thread : client_threads) {
-        thread.join();
+        std::cout << "El juego termino. Esperando a nuevos jugadores...\n";
     }
 
     close(server_socket);
 }
+
 
 void showUsage(const char *program_name) {
     std::cerr << "Uso: " << program_name 
@@ -268,12 +269,7 @@ int main(int argc, char *argv[]) {
     }
 
     QuizServer server;
-    server.loadQuestions(questions_file);
-    while ( true )
-    {
-        server.startServer(port, required_users, questions_count);
-    }
-    
+    server.loadQuestions(questions_file);    
     server.startServer(port, required_users, questions_count);
 
     return 0;

@@ -20,7 +20,6 @@ int main(int argc, char *argv[]) {
     int port = 0;
     char *server_ip = nullptr;
 
-    // Parsear los parámetros
     for (int i = 1; i < argc; i += 2) {
         if (strcmp(argv[i], "-n") == 0) {
             nickname = argv[i + 1];
@@ -50,7 +49,7 @@ int main(int argc, char *argv[]) {
     struct sockaddr_in server_addr;
     char buffer[BUFFER_SIZE];
 
-    // Intentando crear el socket
+    // crear el socket
     client_socket = socket(AF_INET, SOCK_STREAM, 0);
     if (client_socket < 0) {
         std::cerr << "Error al crear el socket\n";
@@ -73,37 +72,43 @@ int main(int argc, char *argv[]) {
 
     std::cout << "Conectado al servidor como " << nickname << "\n";
 
-    bool juego_en_progreso = true;  // Bandera para mantener el bucle del juego
+    ssize_t send_size = send(client_socket, nickname, strlen(nickname), 0);
+    if (send_size < 0) {
+        std::cerr << "Error al enviar el nickname\n";
+        close(client_socket);
+        return 1;
+    }
+
+    bool juego_en_progreso = true;  // Bandera para mantener el bucle
 
     while (juego_en_progreso) {
         memset(buffer, 0, sizeof(buffer));
 
-        // Recibiendo datos del servidor
+        // Recibe datos del servidor
         ssize_t recv_size = recv(client_socket, buffer, sizeof(buffer), 0);
         if (recv_size <= 0) {
             std::cerr << "Error al recibir datos o conexión cerrada\n";
             break;
         }
 
-        // Mostrar mensaje recibido del servidor
         std::cout << "Mensaje del servidor: " << buffer << "\n";
 
         // Verificar si es una pregunta
         if (strncmp(buffer, "Pregunta:", 8) == 0) {
             std::cout << "Tu respuesta (1-3): ";
 
-            memset(buffer, 0, sizeof(buffer));  // Limpiar buffer antes de leer la entrada
+            memset(buffer, 0, sizeof(buffer));  // Limpia el  buffer antes de leer la entrada
             fgets(buffer, sizeof(buffer), stdin);
-            buffer[strcspn(buffer, "\n")] = 0;  // Quitar el salto de línea
+            buffer[strcspn(buffer, "\n")] = 0; 
 
-            // Enviar respuesta al servidor
+            // Envia respuesta al servidor
             ssize_t send_size = send(client_socket, buffer, strlen(buffer), 0);
             if (send_size < 0) {
                 std::cerr << "Error al enviar respuesta\n";
                 break;
             }
         } 
-        // Verificar si es el mensaje de fin del juego
+        // Verifica si es el mensaje de fin del juego
         else if (strncmp(buffer, "El ganador es", 13) == 0) {
             std::cout << "¡Juego terminado! " << buffer << "\n";
             juego_en_progreso = false;  // Salir del bucle

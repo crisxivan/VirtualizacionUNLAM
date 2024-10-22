@@ -1,3 +1,8 @@
 ¿De qué color era el caballo blanco de San Martín?,2,Negro,Blanco,Marrón
 ¿Cuál es la capital de Francia?,1,Paris,Londres,Berlín
 ¿Cuál es el río más largo del mundo?,1,Nilo,Amazonas,Mississippi
+¿Cuántas Copas del Mundo ha ganado Argentina hasta 2022?,3,1,2,3
+¿En qué año se celebró la primera Copa del Mundo de la FIFA?,2,1950,1930,1942
+¿Cuál es el océano más grande del mundo?,3,Atlántico,Índico,Pacífico
+¿Quién pintó la Mona Lisa?,1,Leonardo da Vinci,Vincent van Gogh,Pablo Picasso
+
