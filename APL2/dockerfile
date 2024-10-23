@@ -13,11 +13,11 @@ RUN apt-get update && apt-get install -y \
 COPY ./ /apl/
 
 # Compila cada ejercicio
-RUN cd ejercicio1 && make
-RUN cd ejercicio2 && make
-RUN cd ejercicio3 && make
-RUN cd ejercicio4 && make
-RUN cd ejercicio5 && make
+RUN cd Ejercicio1 && make
+RUN cd Ejercicio2 && make
+RUN cd Ejercicio3 && make
+RUN cd Ejercicio4 && make
+RUN cd Ejercicio5 && make
 
 # para mantener el contenedor activo
 CMD ["bash"]
