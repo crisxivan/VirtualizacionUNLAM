@@ -19,6 +19,7 @@ Integrantes:
 #include <string>
 #include <iostream>
 #include <fstream>
+#include <limits>
 
 #define SEGMENTO_ID	504
 
@@ -127,6 +128,11 @@ int main(int argc, char* argv[]){
             do{
                 cout << "ingrese el numero de respuesta correcta (entre 1 y 3)";
                 cin >> men.rta_final;
+                if (cin.fail()) {
+                cin.clear();
+                cin.ignore(numeric_limits<streamsize>::max(), '\n'); 
+                cout << "Entrada no válida. Por favor, ingrese un número entre 1 y 3." << endl;
+                }
             }while(men.rta_final < 1 || men.rta_final > 3);
 
             sem_wait(escribir);
