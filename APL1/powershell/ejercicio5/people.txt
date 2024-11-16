@@ -1,0 +1,6 @@
+"Id","Name","Gender","Height","Mass","BirthYear"
+"1","Luke Skywalker","male","172","77","19BBY"
+"2","C-3PO","n/a","167","75","112BBY"
+"3","R2-D2","n/a","96","32","33BBY"
+"4","Darth Vader","male","202","136","41.9BBY"
+"10","Obi-Wan Kenobi","male","182","77","57BBY"

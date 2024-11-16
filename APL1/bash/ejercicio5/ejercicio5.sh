@@ -30,15 +30,15 @@ do
         -p | --people)
         entrada="$2"
         IFS=',' read -r -a vector <<< "$entrada"
-        touch "/tmp/people.txt"
+        touch "people.txt"
 
         for elemento in "${vector[@]}"; do
 
-        resultado=$(jq --arg uid "$elemento" '. | select(.result.uid == $uid)' "/tmp/people.txt")        
+        resultado=$(jq --arg uid "$elemento" '. | select(.result.uid == $uid)' "people.txt")        
 
         if [ -z "$resultado" ]; then
             resultado=$(curl -s -X GET "https://www.swapi.tech/api/people/$elemento/")
-            echo $resultado >> /tmp/people.txt
+            echo $resultado >> people.txt
         fi
 
             echo "$resultado" | jq '{
@@ -50,7 +50,6 @@ do
                                         Birth_Year: .result.properties.birth_year
                                         }'
         done
-        rm /tmp/people.txt
         
         shift 2
         ;;
@@ -58,15 +57,15 @@ do
 
         entrada="$2"
         IFS=',' read -r -a vector <<< "$entrada"
-        touch "/tmp/films.txt"
+        touch "films.txt"
 
         for elemento in "${vector[@]}"; do
 
-        resultado=$(jq --arg uid "$elemento" '. | select(.result.uid == $uid)' "/tmp/films.txt")        
+        resultado=$(jq --arg uid "$elemento" '. | select(.result.uid == $uid)' "films.txt")        
 
         if [ -z "$resultado" ]; then
             resultado=$(curl -s -X GET "https://www.swapi.tech/api/films/$elemento/")
-            echo $resultado >> /tmp/films.txt
+            echo $resultado >> films.txt
         fi
 
             echo "$resultado" | jq '{
@@ -76,7 +75,6 @@ do
                                         "Opening crawl": .result.properties.opening_crawl
                                     }'
         done
-        rm /tmp/films.txt
         
         shift 2
         ;;
