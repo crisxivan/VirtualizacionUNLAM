@@ -40,44 +40,43 @@ function ayuda() {
 	echo "1) Para cerrar definitivamente el script, ingrese:"
     echo "./ejercicio4.sh -d <path> -k"
 }
+
 function demonio() {
 
-while out=$(inotifywait -e create -r -q --format "%w%f %e" "$directorio")
-do
-    read nue_arch _ <<< "$out"
+    while out=$(inotifywait -e create -r -q --format "%w%f %e" "$directorio")
+    do
+        read nue_arch _ <<< "$out"
 
-    nom_arch=$(basename "$nue_arch")
-    tam_arch=$(stat -c%s "$nue_arch")
+        nom_arch=$(basename "$nue_arch")
+        tam_arch=$(stat -c%s "$nue_arch")
 
-  
-    arch_existente=$(find "$directorio" -type f -name "$nom_arch" -size "${tam_arch}c")
-    cantidad_archivos=$(echo "$arch_existente" | wc -l)
+    
+        arch_existente=$(find "$directorio" -type f -name "$nom_arch" -size "${tam_arch}c")
+        cantidad_archivos=$(echo "$arch_existente" | wc -l)
 
-    if [[ $cantidad_archivos -gt 1 ]]; then
-        arch_existente=$(echo "$arch_existente" | tail -n 1)
-    else
-        arch_existente=""    
-    fi
+        if [[ $cantidad_archivos -gt 1 ]]; then
+            arch_existente=$(echo "$arch_existente" | tail -n 1)
+        else
+            arch_existente=""    
+        fi
 
-    if [[ -n "$arch_existente" ]]; then
-        cd /tmp
-        fecha=$(date)
-        cp $arch_existente /tmp/"$fecha"
-        tar -czf backup.tar.gz "$fecha"
-        mv backup.tar.gz "$fecha".tar.gz
+        if [[ -n "$arch_existente" ]]; then
+            cd /tmp
+            fecha=$(date +"%Y%m%d-%H%M%S")
+            cp $arch_existente /tmp/"$fecha"
+            tar -czf backup.tar.gz "$fecha"
+            mv backup.tar.gz "$fecha".tar.gz
 
-        cp "$fecha".tar.gz $salida
-        rm -f "$fecha".tar.gz
-        rm -f "$fecha"
-        
-        cd $salida
-        echo ""$fecha" $arch_existente archivo duplicado" >> log.txt
-        
-        rm "$nue_arch"
-    fi
-done
-
-
+            cp "$fecha".tar.gz $salida
+            rm -rf "$fecha".tar.gz
+            rm -rf "$fecha"
+            
+            cd $salida
+            echo ""$fecha" $arch_existente archivo duplicado" >> log.txt
+            
+            rm "$nue_arch"
+        fi
+    done
 }
 
 options=$(getopt -o s:d:hk --l help,directorio:,salida:,kill -- "$@" 2> /dev/null)
@@ -157,7 +156,7 @@ if [[ "$valido1" == true && "$valido2" == true ]]; then
 elif [[ "$valido1" == true && "$valido3" == true ]]; then
 
     pkill -9 -f "inotifywait -m $directorio"
-    pkill -9 -f "$0"
+    pkill -9 -f "$1"
 
     exit
 
