@@ -1,5 +1,4 @@
 #!/bin/bash
-
 #Integrantes del grupo:
 #-Cespedes, Cristian Ivan -> DNI 41704776
 #-Gomez, Luciano Dario -> DNI 41572055
@@ -79,43 +78,33 @@ fi
 
 # Leer la matriz desde el archivo
 matriz=()
-columnas=-1
 filas=0
+max_columnas=0
 
-while IFS="$separador" read -r linea; do
-    fila=()
-    # verifica si hay "," en vez de "."
-    if [[ "$linea" =~ [0-9]+,[0-9]+ && "$separador" != "," ]]; then
-        echo "Error: La matriz contiene comas como valores decimales. Usa puntos ('.') en su lugar para los decimales."
-        exit 1
+while IFS= read -r linea; do
+    # Si no hay separador, asumimos matriz columna o valor único
+    if [[ "$linea" != *"$separador"* && -n "$separador" ]]; then
+        fila=("$linea")
+    else
+        # Si hay separador, dividir la línea en columnas - el tr es porque sale un error de caracteres
+        fila=($(echo "$linea" | tr "$separador" " " | tr -d '\r'))
     fi
 
-    # verifica si hay caracteres no numericos
-    for valor in $(echo "$linea" | tr "$separador" " "); do
+    for valor in "${fila[@]}"; do
         if ! [[ "$valor" =~ ^-?[0-9]+(\.[0-9]+)?$ ]]; then
             echo "Error: La matriz contiene un valor no numérico: $valor"
             exit 1
         fi
-        fila+=("$valor")
     done
 
-    matriz+=("${fila[@]}")
-    if [ $columnas -eq -1 ]; then
-        columnas=${#fila[@]}
-    else
-        # Verificar que todas las filas tengan el mismo número de columnas
-        if [ ${#fila[@]} -ne $columnas ]; then
-            echo "Error: Las filas no tienen el mismo número de columnas."
-            exit 1
-        fi
+    matriz+=("$(IFS="|"; echo "${fila[*]}")")
+    
+    if [ ${#fila[@]} -gt $max_columnas ]; then
+        max_columnas=${#fila[@]}
     fi
+
     filas=$((filas + 1))
 done < "$archivo_matriz"
-
-if [ $filas -ne $columnas ]; then
-    echo "Error: La matriz no es cuadrada. Número de filas: $filas, Número de columnas: $columnas"
-    exit 1
-fi
 
 # Archivo de salida
 directorio_matriz=$(dirname "$archivo_matriz")
@@ -123,10 +112,15 @@ archivo_salida="$directorio_matriz/salida.$(basename "$archivo_matriz")"
 
 # Función para transponer la matriz
 function transponer_matriz {
-    for ((i=0; i<$columnas; i++)); do
-        for ((j=0; j<${#matriz[@]}/$columnas; j++)); do
-            echo -n "${matriz[$((j * columnas + i))]}" >> "$archivo_salida"
-            if (( j < ((${#matriz[@]} / columnas) - 1) )); then
+    echo "" > "$archivo_salida"
+    for ((i=0; i<$max_columnas; i++)); do
+        for ((j=0; j<$filas; j++)); do
+            IFS="|" read -r -a fila <<< "${matriz[$j]}"
+            if [ $i -lt ${#fila[@]} ]; then
+                echo -n "${fila[$i]}" >> "$archivo_salida"
+            fi
+
+            if (( j < (filas - 1) )); then
                 echo -n "$separador" >> "$archivo_salida"
             fi
         done
@@ -135,23 +129,22 @@ function transponer_matriz {
 }
 
 function producto_escalar_matriz {
-    for ((i=0; i<${#matriz[@]}; i++)); do
-        # Multiplicar usando bc
-        matriz[$i]=$(echo "${matriz[$i]} * $producto_escalar" | bc -l)
-        echo -n "${matriz[$i]}" >> "$archivo_salida"
-        if (( (i + 1) % columnas == 0 )); then
-            echo "" >> "$archivo_salida"
-        else
+    echo "" > "$archivo_salida"
+    for fila in "${matriz[@]}"; do
+        IFS="|" read -r -a valores <<< "$fila"
+        for valor in "${valores[@]}"; do
+            resultado=$(echo "$valor * $producto_escalar" | bc -l)
+            echo -n "$resultado" >> "$archivo_salida"
             echo -n "$separador" >> "$archivo_salida"
-        fi
+        done
+        echo "" >> "$archivo_salida"
     done
 }
 
-# Ejecución según los parámetros
 if [ $trasponer -eq 1 ]; then
     transponer_matriz
-    echo "Operación completada."
+    echo "Transposición completada. Matriz guardada en $archivo_salida."
 else
     producto_escalar_matriz
-    echo "Operación completada."
+    echo "Producto escalar completado. Matriz guardada en $archivo_salida."
 fi
