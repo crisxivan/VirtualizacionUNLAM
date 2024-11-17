@@ -21,21 +21,20 @@
 #>
 
 param (
+    [Parameter(Mandatory=$true)]
     [Alias("matriz")]
-    [string]$archivo_matriz = "",
+    [string]$archivo_matriz,
     
     [Alias("producto")]
-    [double]$producto_escalar = 1,
+    [double]$producto_escalar=1,
     
-    [Alias("transponer")]
     [switch]$trasponer,
     
     [Alias("separador")]
-    [string]$separator = "|",
+    [string]$separator,
     
     [switch]$Help
 )
-
 
 if ($Help) {
     Get-Help $MyInvocation.MyCommand.Path
@@ -77,84 +76,73 @@ if ($separator -match '^\d+$' -or $separator -eq "'-'") {
     exit
 }
 
-# Verificar que el separador esté presente en el archivo
-$escapedSeparator = [regex]::Escape($separator)
-if (-not (Select-String -Pattern $escapedSeparator -Path $archivo_matriz)) {
-    Write-Host "Error: El separador ingresado no es correcto o no se encuentra en el archivo."
-    exit
-}
-
-# Leer la matriz desde el archivo
-$matriz = @()
-$columnas = -1
-$filas = 0
-
-# Leer cada línea del archivo
-Get-Content $archivo_matriz | ForEach-Object {
-    $linea = $_
-    
-    # Validar que la línea no contenga comas
-    if ($linea -match '[0-9]+,[0-9]+' -and $separator -ne ",") {
-        Write-Host "Error: La matriz contiene comas (',') como separador decimal. Usa puntos ('.') en su lugar."
-        exit
-    }
-
-    # Separar la línea en valores y añadir a la matriz
-    $fila = $linea -split [regex]::Escape($separator)
-
-    # Validación adicional para que cada valor sea un número válido (entero o decimal con punto)
-    foreach ($valor in $fila) {
-        if (-not ($valor -match '^(-?[0-9]+(\.[0-9]+)?)$')) {
-            Write-Host "Error: La matriz contiene un valor no numérico: $valor"
-            exit
-        }
-    }
-    
-    $matriz += $fila
-    $filas++
-
-    # Establecer el número de columnas
-    if ($columnas -eq -1) {
-        $columnas = $fila.Count
-    } elseif ($fila.Count -ne $columnas) {
-        Write-Host "Error: Las filas no tienen el mismo número de columnas."
-        exit
-    }
-}
-
-# Verificar si la matriz es cuadrada
-if ($filas -ne $columnas) {
-    Write-Host "Error: La matriz no es cuadrada. Número de filas: $filas, Número de columnas: $columnas"
-    exit
-}
-
+# Leer el contenido del archivo
+$contenido = Get-Content $archivo_matriz
 # Archivo de salida
-# $archivo_salida = "salida.$(Split-Path $archivo_matriz -Leaf)"
 $archivo_salida = Join-Path (Split-Path $archivo_matriz -Parent) "salida.$(Split-Path $archivo_matriz -Leaf)"
 
-# Función para transponer la matriz
+if ($contenido.Count -eq 1) {
+    $primerValor = $contenido -split [regex]::Escape($separator)
+    Write-Host $primerValor
+    if ($primerValor.Count -eq 1 -and $primerValor[0] -match '^(-?[0-9]+(\.[0-9]+)?)$') {
+        # Si es un único valor numérico
+        $matriz = @(@($contenido[0]))  # Convertirlo en una matriz 1x1
+        Write-Host "Matriz 1x1 procesada: $matriz"
+
+        # Si el producto escalar es diferente de 1, lo aplicamos
+        if ($producto_escalar -ne 1) {
+            $matriz = @(@([double]$contenido[0] * $producto_escalar))  # Aplicar el producto escalar
+            Write-Host "Producto escalar aplicado: $matriz"
+        }
+
+        $matriz | Out-File -FilePath $archivo_salida -Encoding utf8
+        Write-Host "Matriz 1x1 procesada."
+        exit
+    }
+}
+
+
+# Leer matriz en un arreglo de filas
+$matriz = @()
+$contenido | ForEach-Object {
+    $linea = $_.Trim()
+    $fila = $linea -split [regex]::Escape($separator)
+
+    if ($fila.Count -eq 1) {
+        $matriz += ,@($fila[0]) 
+    } else {
+        $matriz += ,$fila
+    }
+}
+
+
+
+# Función para trasponer la matriz
 function TransponerMatriz {
+    $maxColumnas = ($matriz | ForEach-Object { $_.Count }) | Measure-Object -Maximum | Select-Object -ExpandProperty Maximum
     $transpuesta = @()
-    for ($i = 0; $i -lt $columnas; $i++) {
+
+    for ($i = 0; $i -lt $maxColumnas; $i++) {
         $nuevaFila = @()
-        for ($j = 0; $j -lt $filas; $j++) {
-            $nuevaFila += $matriz[$j * $columnas + $i]
+        foreach ($fila in $matriz) {
+            if ($i -lt $fila.Count) {
+                $nuevaFila += $fila[$i]
+            } else {
+                $nuevaFila += ""  # Espacio vacío para celdas inexistentes
+            }
         }
         $transpuesta += ($nuevaFila -join $separator)
     }
+
     $transpuesta | Out-File -FilePath $archivo_salida -Encoding utf8
 }
+
 
 # Función para multiplicar la matriz por un escalar
 function ProductoEscalarMatriz {
     $resultados = @()
-    for ($i = 0; $i -lt $filas; $i++) {
-        $filaResultados = @()
-        for ($j = 0; $j -lt $columnas; $j++) {
-            $index = ($i * $columnas) + $j
-            $valor = [double]$matriz[$index] * $producto_escalar
-            $filaResultados += $valor
-        }
+    foreach ($fila in $matriz) {
+        $filaResultados = $fila | ForEach-Object { [double]$_ * $producto_escalar }
         $resultados += ($filaResultados -join $separator)
     }
     $resultados | Out-File -FilePath $archivo_salida -Encoding utf8
