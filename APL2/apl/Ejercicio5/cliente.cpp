@@ -107,7 +107,10 @@ int main(int argc, char *argv[]) {
                 std::cerr << "Error al enviar respuesta\n";
                 break;
             }
-        } 
+        } // Mensaje de espera
+        else if (strncmp(buffer, "Has terminado", 34) == 0) {
+            std::cout << buffer << "\n";
+        }
         // Verifica si es el mensaje de fin del juego
         else if (strncmp(buffer, "El ganador es", 13) == 0) {
             std::cout << "¡Juego terminado! " << buffer << "\n";

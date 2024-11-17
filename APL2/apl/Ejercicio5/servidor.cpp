@@ -1,3 +1,11 @@
+/**
+Integrantes del grupo:
+-Cespedes, Cristian Ivan -> DNI 41704776
+-Gomez, Luciano Dario -> DNI 41572055
+-Luna, Leandro Santiago -> DNI 40886200
+-Panigazzi, Agustin Fabian -> DNI 43744593
+**/
+
 #include <iostream>
 #include <fstream>
 #include <sstream>
@@ -24,6 +32,7 @@ public:
     void loadQuestions(const std::string& filename);
     void handleClient(int client_socket, int client_id, int questions_count);
     void startServer(int port, int required_users, int questions_count);
+    std::vector<std::string> nicknames;
 
 private:
     std::vector<Question> questions;
@@ -71,6 +80,17 @@ void QuizServer::handleClient(int client_socket, int client_id, int questions_co
     int score = 0;
 
     // hay que recibir el nombre - devuelve el cliente id x ahora
+    // Recibir el nickname del cliente
+    memset(buffer, 0, sizeof(buffer));
+    recv(client_socket, buffer, sizeof(buffer), 0);  // Recibir el nickname
+    {
+        std::lock_guard<std::mutex> lock(mtx);
+        if (client_id >= nicknames.size()) {
+            nicknames.resize(client_id + 1);
+        }
+        nicknames[client_id] = std::string(buffer);  // Guardar el nickname
+    }
+    std::cout << "Cliente " << client_id << " registrado como: " << nicknames[client_id] << "\n";
 
     // Envia las preguntas al cliente
     for (int i = 0; i < questions_count && i < questions.size(); i++) {
@@ -111,6 +131,10 @@ void QuizServer::handleClient(int client_socket, int client_id, int questions_co
         }
         scores[client_id] = score;
         finished_clients++;
+
+        snprintf(buffer, sizeof(buffer), "Has terminado. Espera a que los demás jugadores terminen.\n");
+        send(client_socket, buffer, strlen(buffer), 0);
+
         std::cout << " Aguarde a que los demas terminen " << "...\n";
         std::cout << " puntaje "<< scores[client_id] << "...\n";
     }
@@ -144,16 +168,24 @@ void QuizServer::handleClient(int client_socket, int client_id, int questions_co
 
     // Obtener el puntaje del ganador
     int winner_score = scores[winner_id];
+
+    // Determinar el nickname del ganador
+    std::string winner_nickname = nicknames[winner_id];
+
+    snprintf(buffer, sizeof(buffer), 
+             "El ganador es %s con un puntaje de %d!\n", 
+             winner_nickname.c_str(), winner_score);
+    send(client_socket, buffer, strlen(buffer), 0);
     
     // std::cout << " winner_id " << winner_id  << "...\n";
     // std::cout << " score " << scores[0] << "...\n";
     // std::cout << " score " << scores[1] << "...\n";
     // std::cout << " score " << scores[2] << "...\n";
 
-    snprintf(buffer, sizeof(buffer), 
-             "El ganador es el Cliente %d con un puntaje de %d!\n", 
-             winner_id, winner_score);
-    send(client_socket, buffer, strlen(buffer), 0);
+    // snprintf(buffer, sizeof(buffer), 
+    //          "El ganador es el Cliente %d con un puntaje de %d!\n", 
+    //          winner_id, winner_score);
+    // send(client_socket, buffer, strlen(buffer), 0);
 
     close(client_socket);
     // Reseteo las variables
