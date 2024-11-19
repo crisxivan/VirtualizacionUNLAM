@@ -1,107 +1,98 @@
-/**
-Integrantes del grupo:
--Cespedes, Cristian Ivan -> DNI 41704776
--Gomez, Luciano Dario -> DNI 41572055
--Luna, Leandro Santiago -> DNI 40886200
--Panigazzi, Agustin Fabian -> DNI 43744593
-**/
-
 #include <iostream>
 #include <fstream>
-#include <string>
 #include <unistd.h>
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <cstring>
+#include <ctime>
 #include <signal.h>
 #include <sys/types.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-#include <ctime>
 #include <cstdlib>
-#include <cstring>
+#include <cstdio>
 
-#define NOMBRE_FIFO "/tmp/fifo_huellas"
+#define FIFO_NAME "/tmp/fifo_huellas"
 
-bool enEjecutivo = true;
+// Estructura para representar una huella
+struct Huella {
+    int sensor_id;
+    long huella_id;
+};
 
-// Simulación de validación de huella
-bool esHuellaValida(const std::string &idHuella) {
-    return (idHuella.length() % 2 == 0); // Ejemplo: válidas si la longitud es par
-}
-
-void manejarSenal(int senal) {
-    enEjecutivo = false;
-}
-
-void registrarMensaje(const std::string &mensaje, const std::string &archivoLog) {
-    std::ofstream log(archivoLog, std::ios::app);
+void escribir_log(const std::string& mensaje, const std::string& log_file) {
+    std::ofstream log(log_file, std::ios_base::app);
     if (log.is_open()) {
-        time_t ahora = time(0);
-        char* dt = ctime(&ahora);
-        std::string marcaTemporal(dt);
-        marcaTemporal.pop_back(); // Eliminar el carácter '\n'
-        
-        log << marcaTemporal << ": " << mensaje << std::endl;
+        log << mensaje << std::endl;
         log.close();
+    } else {
+        std::cerr << "Error al abrir el archivo de log: " << log_file << std::endl;
+        exit(1);
     }
 }
 
-void validarHuella(const std::string &idSensor, const std::string &idHuella, const std::string &archivoLog) {
-    std::string resultado = "Sensor " + idSensor + (esHuellaValida(idHuella) ? " validó huella: " : " NO validó huella: ") + idHuella;
-    registrarMensaje(resultado, archivoLog);
+bool es_valida(long huella_id) {
+    return (huella_id >= 1000000000 && huella_id <= 1999999999);
 }
 
-void mostrarAyuda() {
-    std::cout << "Uso: validador -l <archivo_log>" << std::endl;
-    std::cout << "  -l, --log     Archivo de log donde se escribirán los mensajes." << std::endl;
-    std::cout << "  -h, --help    Muestra esta ayuda." << std::endl;
+void manejar_signal(int signal) {
+    if (signal == SIGTERM || signal == SIGINT) {
+        std::cout << "Proceso de validador finalizado." << std::endl;
+        // Eliminar el FIFO al terminar
+        unlink(FIFO_NAME);
+        exit(0);
+    }
 }
 
 int main(int argc, char *argv[]) {
-    if (argc < 3) {
-        mostrarAyuda();
-        return 1;
+    if (argc != 3) {
+        std::cerr << "Uso incorrecto. Se debe especificar el archivo de log y FIFO." << std::endl;
+        exit(1);
     }
 
-    std::string archivoLog;
-    for (int i = 1; i < argc; ++i) {
-        if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0) {
-            mostrarAyuda();
-            return 0;
+    std::string log_file = argv[1];
+    std::string fifo_name = argv[2];
+
+    // Configurar el proceso como demonio
+    if (fork() != 0) {
+        return 0;  // El proceso padre termina, dejando el demonio corriendo
+    }
+    setsid();  // Crear una nueva sesión para el demonio
+
+    // Registrar el manejador de señales
+    signal(SIGTERM, manejar_signal);
+    signal(SIGINT, manejar_signal);
+
+    // Crear el FIFO si no existe
+    if (mkfifo(fifo_name.c_str(), 0666) == -1) {
+        std::cerr << "Error al crear el FIFO: " << fifo_name << std::endl;
+        exit(1);
+    }
+
+    // Abrir el FIFO para lectura
+    int fifo = open(fifo_name.c_str(), O_RDONLY);
+    if (fifo == -1) {
+        std::cerr << "Error al abrir el FIFO: " << fifo_name << std::endl;
+        exit(1);
+    }
+
+    while (true) {
+        Huella huella;
+        ssize_t bytes_leidos = read(fifo, &huella, sizeof(Huella));
+        if (bytes_leidos > 0) {
+            // Obtener la fecha y hora actual
+            std::time_t t = std::time(nullptr);
+            std::tm* tm_info = std::localtime(&t);
+            char fecha_hora[20];
+            strftime(fecha_hora, sizeof(fecha_hora), "%Y-%m-%d %H:%M:%S", tm_info);
+
+            std::string resultado = es_valida(huella.huella_id) ? "Huella válida" : "Huella no válida";
+
+            // Escribir en el log
+            std::string mensaje = std::string(fecha_hora) + " Sensor: " + std::to_string(huella.sensor_id)
+                                  + " Huella ID: " + std::to_string(huella.huella_id) + " - " + resultado;
+            escribir_log(mensaje, log_file);
         }
-        if (strcmp(argv[i], "-l") == 0 && (i + 1) < argc) {
-            archivoLog = argv[++i];
-        }
     }
 
-    signal(SIGINT, manejarSenal);
-    signal(SIGTERM, manejarSenal);
-
-    // Crear FIFO
-    if (mkfifo(NOMBRE_FIFO, 0666) == -1) {
-        return 1;
-    }
-
-    // Abrir FIFO para lectura
-    std::ifstream fifo(NOMBRE_FIFO);
-    if (!fifo.is_open()) {
-        return 1;
-    }
-
-    while (enEjecutivo) {
-        std::string linea;
-        if (getline(fifo, linea)) {
-            if (!linea.empty()) {
-                size_t separador = linea.find(' ');
-                if (separador != std::string::npos) {
-                    std::string idSensor = linea.substr(0, separador);
-                    std::string idHuella = linea.substr(separador + 1);
-                    validarHuella(idSensor, idHuella, archivoLog);
-                }
-            }
-        }
-    }
-
-    fifo.close();
-    unlink(NOMBRE_FIFO); // Eliminar FIFO al finalizar
-
+    close(fifo);
     return 0;
 }
