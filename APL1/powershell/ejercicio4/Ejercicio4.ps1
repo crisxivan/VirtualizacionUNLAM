@@ -24,106 +24,85 @@
 #-Panigazzi, Agustin Fabian -> DNI 43744593
 
 param(
-    [Parameter(Mandatory=$true, HelpMessage="Especifica el directorio a monitorear.")][string]$directorio,
-    [string]$salida,
-    [switch]$kill
+	[Parameter(Mandatory=$true)] [ValidateNotNullOrEmpty()]
+    [string] $directorio,
+    [string] $salida,
+	[switch] $kill
 )
 
-# Archivo de PID para rastrear si ya hay un proceso en ejecución
-$pidFile = Join-Path -Path $env:TEMP -ChildPath "demonio_$((Get-Item $directorio).FullName -replace '[\\/:]', '_').pid"
 
-# Si se usa el parámetro -kill, entonces el objetivo es detener el demonio
+if (-not ($salida -xor $kill)) {
+    Write-Host "Debes proporcionar solo uno de los parámetros: salida o kill." -ForegroundColor Red
+    exit
+}
+
+if (-not (Test-Path $directorio)) {
+	Write-Error "Directorio no encontrado."
+	exit
+}
+
+function stop_daemon {
+	# Aquí verificamos si hay algún monitor activo en el directorio y lo detenemos
+	$fullPath = Resolve-Path $directorio
+	$jobList = $(Get-Job | Where-Object { $_.Name -eq $fullPath })
+	if ($jobList) {
+		Write-Host "Deteniendo monitoreo '$directorio'..."
+		$jobList | ForEach-Object { Stop-Job -Id $_.Id; Remove-Job -Id $_.Id }
+		Write-Host "Detenido!."
+	} else {
+		Write-Host "$directorio no estaba monitoreado."
+	}
+}
+
 if ($kill) {
-    if (Test-Path $pidFile) {
-        $_pid = Get-Content $pidFile
-        Write-Host $_pid
-        try {
-            Stop-Job -Id $_pid
-            Remove-Item $pidFile
-            Write-Host "Proceso demonio detenido."
-        } catch {
-            Write-Host "No se pudo detener el proceso demonio." -ForegroundColor Red
-        }
-    } else {
-        Write-Host "No hay proceso demonio en ejecución para el directorio especificado." -ForegroundColor Red
-    }
-    exit
+	stop_daemon
+	exit
+} else {
+	$fullPath = Resolve-Path $directorio
+	$fullOut = Resolve-Path $salida
+
+    $scriptBlock = {
+		param (
+        	[string]$fuente,
+        	[string]$destino
+    	)
+		$fsw = New-Object IO.FileSystemWatcher $fuente
+		$fsw.IncludeSubdirectories = $true
+		$fsw.Filter = '*.*'
+		$fsw.EnableRaisingEvents = $true
+
+		$action = {
+			$newFile = $Event.SourceEventArgs.FullPath
+			Start-Sleep -Seconds 1
+
+			$fileName = [System.IO.Path]::GetFileName($newFile)
+			$fileSize = (Get-Item $newFile).Length
+			$duplicatedFile = $(Get-ChildItem -Path $fuente -Recurse | Where-Object { $_.Name -eq $fileName -and $_.Length -eq $fileSize -and $_.FullName -ne $newFile })
+
+			if ($duplicatedFile) {
+				$backupName =  "$(Get-Date -forma yyyyMMddhhmmss).zip"
+				Compress-Archive -Path $newFile -DestinationPath $($destino + '\' + $backupName) 
+				Remove-Item -Path $newFile
+				Add-Content -Path "$destino\log.txt" -Value "Backup $newFile - Archivo $backupName"
+				Add-Content -Path "$destino\log.txt" -Value ""
+			}
+		}
+
+		Register-ObjectEvent -InputObject $fsw -EventName "Created" -Action $action
+        #faltaba esto
+		while ($true) {
+			Start-Sleep -Seconds 5
+		}
+	}
+
+	$jobList = $(Get-Job | Where-Object { $_.Name -eq $fullPath })
+	if ($jobList) {
+		Write-Host "El directorio $directorio está monitoreado. No se permite la acción."
+		stop_monitor
+		exit
+	}
+	Write-Host "Iniciando monitoreo de directorio: $directorio"
+
+	# proceso en seg plano le pasamos el script block del demonio
+	Start-Job -Name $fullPath -ScriptBlock $scriptBlock -ArgumentList $fullPath, $fullOut | Out-Null
 }
-
-# Validar que no haya otro proceso demonio ejecutándose
-if (Test-Path $pidFile) {
-    Write-Host $pidFile
-    Write-Host "Ya existe un proceso demonio ejecutándose en este directorio. No se pueden ejecutar dos al mismo tiempo." -ForegroundColor Red
-    exit
-}
-
-# Validar parámetros de salida
-if (-not $salida) {
-    Write-Host "Debes proporcionar un directorio de salida para los archivos comprimidos." -ForegroundColor Red
-    exit
-}
-
-# Resolución de rutas
-$directorioAbs = Resolve-Path $directorio
-$salidaAbs = Resolve-Path $salida
-
-# Crear el script block que se ejecutará como demonio
-$scriptBlock = {
-    param (
-        [string]$directorioAbs,
-        [string]$salidaAbs,
-        [string]$archivoLog
-    )
-
-    if (-not (Test-Path $archivoLog)) {
-        New-Item -Path $archivoLog -ItemType File
-    }
-
-    $watcher = New-Object System.IO.FileSystemWatcher
-    $watcher.Path = $directorioAbs
-    $watcher.Filter = "*.*"
-    $watcher.IncludeSubdirectories = $true
-    $watcher.EnableRaisingEvents = $true
-
-    $action = {
-        Start-Sleep -Seconds 1
-        $nuevoArch = $Event.SourceEventArgs.FullPath
-        $nombre = $Event.SourceEventArgs.Name
-        $tam = (Get-Item $nuevoArch).length
-
-        $archivos = Get-ChildItem -Path $using:directorioAbs -Recurse | Where-Object { -not $_.PSIsContainer }
-        
-        # Verificar si ya existe un archivo con el mismo nombre y tamaño
-        $existearch = $archivos | Where-Object { 
-            $_.Name -eq $nombre -and $_.Length -eq $tam -and $_.FullName -ne $nuevoArch 
-        }
-        
-        if ($existearch.Count -gt 0) {
-            # Comprobar si ya existe un archivo ZIP para este archivo
-            # $comprimido = Join-Path -Path $using:salidaAbs -ChildPath "$nombre.zip"
-            if (-not (Test-Path $comprimido)) {
-                # Comprimir el archivo
-                $comprimido = Join-Path -Path $using:salidaAbs -ChildPath "$(Get-Date -Format 'yyyyMMdd-HHmmss').zip"
-                Compress-Archive -Path $nuevoArch -DestinationPath $comprimido
-                $contenido = "$nombre es un archivo duplicado."
-                $contenido >> $archivo
-            }
-        }
-    }
-
-    Register-ObjectEvent -InputObject $watcher -EventName Created -Action $action
-    Register-ObjectEvent -InputObject $watcher -EventName Changed -Action $action
-
-    while ($true) {
-        Start-Sleep -Seconds 1
-    }
-}
-
-$archivoLog = Join-Path -Path $salidaAbs -ChildPath "log.txt"
-
-# Iniciar el proceso en segundo plano como trabajo (job)
-$job = Start-Job -ScriptBlock $scriptBlock -ArgumentList $directorioAbs, $salidaAbs, $archivoLog
-
-# Guardar el PID del trabajo
-$job.Id | Out-File -FilePath $pidFile
-Write-Host "Demonio iniciado. PID: $($job.Id)"
